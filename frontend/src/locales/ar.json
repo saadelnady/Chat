@@ -1,0 +1,39 @@
+{
+  "translation": {
+    "welcome": "أهلاً بك {{username}}",
+    "logout": "تسجيل الخروج",
+    "sellers": "البائعين",
+    "type_message": "اكتب رسالة...",
+    "choose_conversation": "اختر محادثة",
+    "select_seller_msg": "اختر بائعاً من القائمة الجانبية لعرض رسائله وبدء الدردشة.",
+    "please_select_seller": "من فضلك اختر بائعاً لبدء الدردشة!",
+    "no_messages": "لا توجد رسائل بعد",
+    "you": "أنت",
+    "admin": "مسؤول",
+    "seller": "بائع",
+    "login": {
+      "title": "تسجيل الدخول",
+      "username": "اسم المستخدم",
+      "password": "كلمة المرور",
+      "button": "دخول",
+      "error_msg": "فشل تسجيل الدخول. تحقق من بياناتك.",
+      "loading_msg": "جاري الدخول...",
+      "no_account": "ليس لديك حساب؟",
+      "register_now": "سجل الآن"
+    },
+    "register": {
+      "title": "إنشاء حساب",
+      "username": "اسم المستخدم",
+      "password": "كلمة المرور",
+      "role": "الصلاحية",
+      "button": "تسجيل",
+      "error_msg": "فشل إنشاء الحساب. حاول مرة أخرى.",
+      "loading_msg": "جاري التسجيل...",
+      "has_account": "لديك حساب بالفعل؟",
+      "login_now": "دخول الآن"
+    },
+    "errors": {
+      "select_seller": "من فضلك اختر محادثة أولاً!"
+    }
+  }
+}

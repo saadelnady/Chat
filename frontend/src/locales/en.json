@@ -1,0 +1,39 @@
+{
+  "translation": {
+    "welcome": "Welcome {{username}}",
+    "logout": "Logout",
+    "sellers": "Sellers",
+    "type_message": "Type a message...",
+    "choose_conversation": "Choose a Conversation",
+    "select_seller_msg": "Select a seller from the sidebar to view their messages and start chatting.",
+    "please_select_seller": "Please select a seller to start chatting!",
+    "no_messages": "No messages yet",
+    "you": "You",
+    "admin": "Admin",
+    "seller": "Seller",
+    "login": {
+      "title": "Login",
+      "username": "Username",
+      "password": "Password",
+      "button": "Login",
+      "error_msg": "Login failed. Check your credentials.",
+      "loading_msg": "Logging in...",
+      "no_account": "Don't have an account?",
+      "register_now": "Register now"
+    },
+    "register": {
+      "title": "Create Account",
+      "username": "Username",
+      "password": "Password",
+      "role": "Role",
+      "button": "Register",
+      "error_msg": "Registration failed. Try again.",
+      "loading_msg": "Registering...",
+      "has_account": "Already have an account?",
+      "login_now": "Login now"
+    },
+    "errors": {
+      "select_seller": "Please select a seller to chat with first!"
+    }
+  }
+}
