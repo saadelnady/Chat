@@ -1,83 +1,21 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import useSocket from "../lib/useSocket";
-
-const userColors = [
-  "#fecaca",
-  "#fde047",
-  "#86efac",
-  "#93c5fd",
-  "#c4b5fd",
-  "#fbcfe8",
-  "#bef264",
-  "#7dd3fc",
-  "#a7f3d0",
-  "#fca5a5",
-];
-
-const getColorForUser = (username) => {
-  if (!username) return "#86efac";
-  let hash = 0;
-  for (let i = 0; i < username.length; i++) {
-    hash = username.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return userColors[Math.abs(hash) % userColors.length];
-};
+import { getSellers } from "../api/sellers";
+import useSocket from "../hooks/useSocket";
 
 export default function Chat({ user }) {
+  const [selectedSeller, setSelectedSeller] = useState(null);
+  const { messages, message, setMessage, sendMessage, messagesEndRef, notifications, clearNotifications, onlineUsers } =
+    useSocket(user, selectedSeller?._id);
   const { t, i18n } = useTranslation();
-
-  const {
-    messages,
-    sellers,
-    onlineSellers,
-    unreadCounts,
-    setUnreadCounts,
-    currentRoomRef,
-    socket,
-  } = useSocket(user);
-
-  const [message, setMessage] = useState("");
-  const [currentRoom, setCurrentRoom] = useState(null);
   const [showSidebar, setShowSidebar] = useState(false);
-  const messagesEndRef = useRef(null);
-
-  // sync room ref
-  useEffect(() => {
-    currentRoomRef.current = currentRoom;
-
-    if (currentRoom) {
-      setUnreadCounts((prev) => ({ ...prev, [currentRoom]: 0 }));
-    }
-  }, [currentRoom, setUnreadCounts, currentRoomRef]);
-
-  // scroll
-  useEffect(() => {
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
-  }, [messages, currentRoom]);
+  const [sellers, setSellers] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   // RTL
   useEffect(() => {
     document.body.dir = i18n.language === "ar" ? "rtl" : "ltr";
   }, [i18n.language]);
-
-  const sendMessage = () => {
-    if (!message.trim()) return;
-
-    const room = user.role === "seller" ? user.username : currentRoom;
-
-    if (user.role === "admin" && !room) {
-      alert(t("errors.select_seller"));
-      return;
-    }
-
-    if (socket) {
-      socket.emit("send_message", { to: room, message });
-    }
-    setMessage("");
-  };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -87,6 +25,18 @@ export default function Chat({ user }) {
   const toggleLanguage = () => {
     const newLang = i18n.language === "en" ? "ar" : "en";
     i18n.changeLanguage(newLang);
+  };
+
+  useEffect(() => {
+    if (user && user.role === "admin") {
+      getSellers().then((data) => setSellers(data));
+    }
+  }, [user]);
+
+  const handleSellerClick = (seller) => {
+    setSelectedSeller(seller);
+    clearNotifications();
+    setShowNotifications(false);
   };
 
   if (!user) return <div style={{ color: "white" }}>{t("loading")}</div>;
@@ -121,6 +71,33 @@ export default function Chat({ user }) {
                 <span>{t("sellers")}</span>
               </button>
             )}
+            <button className="bell-btn" onClick={() => setShowNotifications(!showNotifications)}>
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+                <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+              </svg>
+              {notifications.length > 0 && (
+                <span className="bell-badge">{notifications.length}</span>
+              )}
+            </button>
+            {showNotifications && (
+              <div className="notifications-dropdown">
+                <div className="notifications-header">
+                  <span>الإشعارات</span>
+                  <button className="clear-notif-btn" onClick={clearNotifications}>مسح الكل</button>
+                </div>
+                {notifications.length === 0 ? (
+                  <p className="no-notif">لا توجد إشعارات</p>
+                ) : (
+                  notifications.map((n) => (
+                    <div key={n.id} className="notif-item">
+                      <span className="notif-author">{n.author}</span>
+                      <span className="notif-msg">{n.message}</span>
+                      <span className="notif-time">{new Date(n.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
             <button onClick={handleLogout} className="logout-btn">
               <svg
                 viewBox="0 0 24 24"
@@ -142,24 +119,16 @@ export default function Chat({ user }) {
               <div className="sellers-list-items">
                 {sellers.map((seller) => (
                   <button
-                    key={seller}
-                    onClick={() => {
-                      setCurrentRoom(seller);
-                      setShowSidebar(false);
-                    }}
-                    className={`seller-btn ${currentRoom === seller ? "active" : ""}`}
+                    key={seller?._id}
+                    className={`seller-btn ${selectedSeller?._id === seller?._id ? "active" : ""}`}
+                    onClick={() => handleSellerClick(seller)}
                   >
-                    <div className="seller-name-container">
-                      {seller}
-                      {onlineSellers.includes(seller) && (
+                    <span className="seller-name-container">
+                      {seller.username}
+                      {onlineUsers.includes(seller._id) && (
                         <span className="online-indicator"></span>
                       )}
-                    </div>
-                    {unreadCounts[seller] > 0 && (
-                      <span className="unread-badge">
-                        {unreadCounts[seller]}
-                      </span>
-                    )}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -167,7 +136,7 @@ export default function Chat({ user }) {
           )}
 
           <div className="main-chat-area">
-            {user.role === "admin" && !currentRoom ? (
+            {user.role === "admin" && !selectedSeller ? (
               <div className="no-room-container">
                 <div className="no-room-content">
                   <div className="no-room-icon">💬</div>
@@ -181,40 +150,21 @@ export default function Chat({ user }) {
                   className="messages"
                   style={{ border: "none", height: "auto" }}
                 >
-                  {messages
-                    .filter(
-                      (msg) =>
-                        user.role === "seller" ||
-                        (currentRoom && msg.room === currentRoom),
-                    )
-                    .map((m, i) => {
-                      const isMe = m.author === user.username;
-                      return (
-                        <div
-                          key={i}
-                          className={`message-bubble ${isMe ? "sent" : "received"}`}
-                        >
-                          <div className="msg-info">
-                            <span
-                              className="msg-author"
-                              style={{
-                                color: isMe
-                                  ? "rgba(255,255,255,0.9)"
-                                  : getColorForUser(m.author),
-                              }}
-                            >
-                              {isMe ? t("you") : m.author}
-                            </span>
-                            {user.role === "admin" && !currentRoom && (
-                              <span className="room-badge">{m.room}</span>
-                            )}
-                          </div>
-                          <div className="msg-text">{m.message}</div>
-                          <div className="msg-time">{m.time}</div>
-                        </div>
-                      );
-                    })}
                   <div ref={messagesEndRef} style={{ height: "1px" }} />
+                  {messages.map((msg, index) => (
+                    <div
+                      key={index}
+                      className={`message-bubble ${msg.author === user.username ? "sent" : "received"}`}
+                    >
+                      <div className="msg-info">
+                        <span className="msg-author">{msg.author}</span>
+                      </div>
+                      <div className="msg-text">{msg.message}</div>
+                      <div className="msg-timestamp">
+                        {new Date(msg.timestamp).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 <form

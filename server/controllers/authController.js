@@ -1,10 +1,10 @@
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const User = require("../models/User");
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import User from "../models/User.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
-exports.register = async (req, res) => {
+const register = async (req, res) => {
   const { username, password, role } = req.body;
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -15,7 +15,7 @@ exports.register = async (req, res) => {
   }
 };
 
-exports.login = async (req, res) => {
+const login = async (req, res) => {
   const { username, password } = req.body;
   try {
     const user = await User.findOne({ username });
@@ -27,10 +27,12 @@ exports.login = async (req, res) => {
     const token = jwt.sign(
       { id: user._id, username: user.username, role: user.role },
       JWT_SECRET,
-      { expiresIn: "1d" }
+      { expiresIn: "1d" },
     );
     res.json({ token });
   } catch (error) {
     res.status(500).json({ error: "Server error" });
   }
 };
+
+export default { register, login };

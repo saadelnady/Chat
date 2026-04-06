@@ -8,12 +8,12 @@ function App() {
   const [user, setUser] = useState(null);
   const [showRegister, setShowRegister] = useState(false);
 
-  // استخرج بيانات الـ JWT لتحديد role
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
+
         setUser(payload); // {username, role, id}
       } catch (err) {
         console.error("Invalid token");
@@ -21,6 +21,13 @@ function App() {
       }
     }
   }, [loggedIn]);
+
+  // اطلب الإذن لما اليوزر يفتح الموقع
+  useEffect(() => {
+    if (Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
 
   if (!loggedIn) {
     return showRegister ? (
