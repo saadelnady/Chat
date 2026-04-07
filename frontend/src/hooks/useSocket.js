@@ -4,14 +4,21 @@ import { io } from "socket.io-client";
 export default function useSocket(user, selectedSellerId = null) {
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
+  const [targetScrollMessageId, setTargetScrollMessageId] = useState(null);
   const messagesEndRef = useRef(null);
   const [notifications, setNotifications] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
-  
+  const [typingUser, setTypingUser] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
+
   const socketRef = useRef(null);
   const isWindowFocused = useRef(true);
+  const notificationSound = useRef(
+    new Audio(
+      "https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3",
+    ),
+  );
 
-  // تتبع تركيز الصفحة
   useEffect(() => {
     const onFocus = () => (isWindowFocused.current = true);
     const onBlur = () => (isWindowFocused.current = false);
@@ -25,10 +32,23 @@ export default function useSocket(user, selectedSellerId = null) {
 
   const clearNotifications = () => setNotifications([]);
 
+  const removeNotification = (id) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
   useEffect(() => {
     if (!user) return;
 
-    socketRef.current = io("http://localhost:3000");
+    socketRef.current = io("http://localhost:3000"); // Updated to 3001 as per server console
+
+    socketRef.current.on("connect", () => {
+      setIsConnected(true);
+      socketRef.current.emit("user_connected", user.id);
+    });
+
+    socketRef.current.on("disconnect", () => {
+      setIsConnected(false);
+    });
 
     const currentRoom =
       user.role === "seller"
@@ -45,32 +65,60 @@ export default function useSocket(user, selectedSellerId = null) {
       socketRef.current.emit("join_room", "admins_notifications");
     }
 
+    const triggerAlert = (data) => {
+      if (data.author === user.username) return;
+
+      notificationSound.current
+        .play()
+        .catch((e) => console.log("Sound error:", e));
+
+      const isCurrentlyViewing =
+        data.room === currentRoom && isWindowFocused.current;
+
+      if (!isCurrentlyViewing) {
+        if (Notification.permission === "granted") {
+          const bodyText = data.fileUrl
+            ? data.fileType === "image"
+              ? "📷 صورة جديدة"
+              : "📁 ملف جديد"
+            : data.message;
+          new Notification(`رسالة جديدة من ${data.author}`, {
+            body: bodyText,
+            icon: "/chat-icon.png",
+          });
+        }
+
+        setNotifications((prev) => [
+          {
+            id: data._id || Date.now(),
+            author: data.author,
+            message: data.fileUrl
+              ? data.fileType === "image"
+                ? "📷 صورة"
+                : `📁 ${data.fileName}`
+              : data.message,
+            timestamp: data.timestamp,
+            room: data.room,
+          },
+          ...prev,
+        ]);
+      }
+    };
+
     socketRef.current.on("receive_message", (data) => {
       if (Array.isArray(data)) {
         setMessages(data);
       } else {
         if (data.room === currentRoom) {
           setMessages((prev) => [...prev, data]);
+          triggerAlert(data);
         }
+      }
+    });
 
-        if (data.author !== user.username) {
-          // نستخدم الـ ref هنا عشان نمنع الـ re-connection
-          const isInCurrentActiveChat = data.room === currentRoom && isWindowFocused.current;
-
-          if (!isInCurrentActiveChat) {
-            if (Notification.permission === "granted") {
-              new Notification(`رسالة جديدة من ${data.author}`, {
-                body: data.message,
-                icon: "/chat-icon.png",
-              });
-            }
-
-            setNotifications((prev) => [
-              { id: Date.now(), author: data.author, message: data.message, timestamp: data.timestamp, room: data.room },
-              ...prev,
-            ]);
-          }
-        }
+    socketRef.current.on("new_notification", (data) => {
+      if (data.room !== currentRoom) {
+        triggerAlert(data);
       }
     });
 
@@ -78,7 +126,13 @@ export default function useSocket(user, selectedSellerId = null) {
       setOnlineUsers(users);
     });
 
-    socketRef.current.emit("user_connected", user.id);
+    socketRef.current.on("user_typing", (data) => {
+      if (data.isTyping) {
+        setTypingUser(data.username);
+      } else {
+        setTypingUser(null);
+      }
+    });
 
     if (currentRoom) {
       socketRef.current.emit("receive_message", { room: currentRoom });
@@ -87,10 +141,24 @@ export default function useSocket(user, selectedSellerId = null) {
     return () => {
       socketRef.current.disconnect();
     };
-  }, [user, selectedSellerId]); // شلنا isWindowFocused من هنا عشان ميعملش ريكونكت
+  }, [user, selectedSellerId]);
 
-  const sendMessage = () => {
-    if (!message.trim()) return;
+  const sendTypingStatus = (isTyping) => {
+    const roomName =
+      user.role === "seller"
+        ? `seller_${user.id}`
+        : selectedSellerId
+          ? `seller_${selectedSellerId}`
+          : null;
+    if (!roomName || !socketRef.current) return;
+    socketRef.current.emit(isTyping ? "typing" : "stop_typing", {
+      room: roomName,
+      username: user.username,
+    });
+  };
+
+  const sendMessage = (fileData = null) => {
+    if (!message.trim() && !fileData) return;
     const roomName =
       user.role === "seller"
         ? `seller_${user.id}`
@@ -101,21 +169,23 @@ export default function useSocket(user, selectedSellerId = null) {
 
     const msgData = {
       room: roomName,
-      message,
+      message: message.trim() || "",
       author: user.username,
       role: user.role,
       timestamp: new Date().toISOString(),
+      ...fileData, // Spread fileUrl, fileName, fileType if present
     };
 
     socketRef.current.emit("send_message", msgData);
+    sendTypingStatus(false);
     setMessage("");
   };
 
   useEffect(() => {
-    if (messagesEndRef.current) {
+    if (!targetScrollMessageId && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages]);
+  }, [messages, targetScrollMessageId]);
 
   return {
     messages,
@@ -125,6 +195,12 @@ export default function useSocket(user, selectedSellerId = null) {
     messagesEndRef,
     notifications,
     clearNotifications,
+    removeNotification,
     onlineUsers,
+    typingUser,
+    isConnected,
+    sendTypingStatus,
+    targetScrollMessageId,
+    setTargetScrollMessageId,
   };
 }

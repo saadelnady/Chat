@@ -5,12 +5,30 @@ import useSocket from "../hooks/useSocket";
 
 export default function Chat({ user }) {
   const [selectedSeller, setSelectedSeller] = useState(null);
-  const { messages, message, setMessage, sendMessage, messagesEndRef, notifications, clearNotifications, onlineUsers } =
-    useSocket(user, selectedSeller?._id);
+  const {
+    messages,
+    message,
+    setMessage,
+    sendMessage,
+    messagesEndRef,
+    notifications,
+    clearNotifications,
+    removeNotification,
+    onlineUsers,
+    typingUser,
+    isConnected,
+    sendTypingStatus,
+    targetScrollMessageId,
+    setTargetScrollMessageId,
+  } = useSocket(user, selectedSeller?._id);
+
   const { t, i18n } = useTranslation();
   const [showSidebar, setShowSidebar] = useState(false);
   const [sellers, setSellers] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const typingTimeoutRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // RTL
   useEffect(() => {
@@ -37,20 +55,103 @@ export default function Chat({ user }) {
     setSelectedSeller(seller);
     clearNotifications();
     setShowNotifications(false);
+    setTargetScrollMessageId(null);
+  };
+
+  const handleNotificationClick = (n) => {
+    if (user.role === "admin") {
+      const sellerId = n.room.includes("_") ? n.room.split("_")[1] : n.room;
+      const targetSeller = sellers.find((s) => s._id === sellerId);
+
+      if (targetSeller) {
+        setSelectedSeller(targetSeller);
+        setShowSidebar(false);
+      }
+    }
+
+    setTargetScrollMessageId(n.id);
+    setShowNotifications(false);
+    removeNotification(n.id);
+  };
+
+  useEffect(() => {
+    if (targetScrollMessageId) {
+      const element = document.getElementById(`msg-${targetScrollMessageId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+        const timer = setTimeout(() => {
+          setTargetScrollMessageId(null);
+        }, 2000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [messages, targetScrollMessageId, setTargetScrollMessageId]);
+
+  const handleInputChange = (e) => {
+    setMessage(e.target.value);
+    sendTypingStatus(true);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      sendTypingStatus(false);
+    }, 2000);
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch("http://localhost:3000/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        const fileData = await response.json();
+        sendMessage(fileData); // Send message with file info
+      } else {
+        alert("فشل في رفع الملف");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      alert("حدث خطأ أثناء الرفع");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   if (!user) return <div style={{ color: "white" }}>{t("loading")}</div>;
 
   return (
     <div className="chat-wrapper">
+      {!isConnected && (
+        <div className="connection-toast">
+          <span className="spinner"></span>
+          {t("reconnecting") || "جاري إعادة الاتصال..."}
+        </div>
+      )}
+
       <div className="chat">
         <div className="chat-header-v2">
-          <h2>
-            {t("welcome", { username: user.username })}{" "}
-            <span className="role-badge">
-              {user.role === "admin" ? t("admin") : t("seller")}
-            </span>
-          </h2>
+          <div className="header-info">
+            <h2>
+              {t("welcome", { username: user.username })}{" "}
+              <span className="role-badge">
+                {user.role === "admin" ? t("admin") : t("seller")}
+              </span>
+            </h2>
+            <div
+              className={`status-indicator ${isConnected ? "online" : "offline"}`}
+            >
+              {isConnected ? t("online") : t("offline")}
+            </div>
+          </div>
+
           <div className="header-actions">
             <button onClick={toggleLanguage} className="lang-btn">
               {i18n.language === "en" ? "العربية" : "English"}
@@ -71,9 +172,17 @@ export default function Chat({ user }) {
                 <span>{t("sellers")}</span>
               </button>
             )}
-            <button className="bell-btn" onClick={() => setShowNotifications(!showNotifications)}>
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
-                <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+            <button
+              className="bell-btn"
+              onClick={() => setShowNotifications(!showNotifications)}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="22"
+                height="22"
+                fill="currentColor"
+              >
+                <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
               </svg>
               {notifications.length > 0 && (
                 <span className="bell-badge">{notifications.length}</span>
@@ -82,17 +191,32 @@ export default function Chat({ user }) {
             {showNotifications && (
               <div className="notifications-dropdown">
                 <div className="notifications-header">
-                  <span>الإشعارات</span>
-                  <button className="clear-notif-btn" onClick={clearNotifications}>مسح الكل</button>
+                  <span>{t("notifications")}</span>
+                  <button
+                    className="clear-notif-btn"
+                    onClick={clearNotifications}
+                  >
+                    {t("clear_notif")}
+                  </button>
                 </div>
                 {notifications.length === 0 ? (
-                  <p className="no-notif">لا توجد إشعارات</p>
+                  <p className="no-notif">{t("no_notif")}</p>
                 ) : (
                   notifications.map((n) => (
-                    <div key={n.id} className="notif-item">
+                    <div
+                      key={n.id}
+                      className="notif-item"
+                      onClick={() => handleNotificationClick(n)}
+                      style={{ cursor: "pointer" }}
+                    >
                       <span className="notif-author">{n.author}</span>
                       <span className="notif-msg">{n.message}</span>
-                      <span className="notif-time">{new Date(n.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                      <span className="notif-time">
+                        {new Date(n.timestamp).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
                     </div>
                   ))
                 )}
@@ -115,7 +239,27 @@ export default function Chat({ user }) {
         <div className="chat-body">
           {user.role === "admin" && (
             <div className={`sellers-sidebar ${showSidebar ? "open" : ""}`}>
-              <h3>{t("sellers")}</h3>
+              <div className="sidebar-header">
+                <h3>{t("sellers")}</h3>
+                <button
+                  className="close-sidebar-btn"
+                  onClick={() => setShowSidebar(false)}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="24"
+                    height="24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
               <div className="sellers-list-items">
                 {sellers.map((seller) => (
                   <button
@@ -150,55 +294,135 @@ export default function Chat({ user }) {
                   className="messages"
                   style={{ border: "none", height: "auto" }}
                 >
-                  <div ref={messagesEndRef} style={{ height: "1px" }} />
                   {messages.map((msg, index) => (
                     <div
-                      key={index}
-                      className={`message-bubble ${msg.author === user.username ? "sent" : "received"}`}
+                      key={msg._id || index}
+                      id={msg._id ? `msg-${msg._id}` : null}
+                      className={`message-bubble ${msg.author === user.username ? "sent" : "received"} ${targetScrollMessageId === msg._id ? "highlighted-message" : ""}`}
                     >
                       <div className="msg-info">
                         <span className="msg-author">{msg.author}</span>
                       </div>
-                      <div className="msg-text">{msg.message}</div>
+
+                      {msg.fileUrl && (
+                        <div className="msg-attachment">
+                          {msg.fileType === "image" ? (
+                            <img
+                              src={msg.fileUrl}
+                              alt={msg.fileName}
+                              className="chat-image"
+                              onClick={() => window.open(msg.fileUrl, "_blank")}
+                            />
+                          ) : (
+                            <a
+                              href={msg.fileUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="file-link"
+                            >
+                              <svg
+                                viewBox="0 0 24 24"
+                                width="20"
+                                height="20"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                                <polyline points="13 2 13 9 20 9"></polyline>
+                              </svg>
+                              <span>{msg.fileName}</span>
+                            </a>
+                          )}
+                        </div>
+                      )}
+
+                      {msg.message && (
+                        <div className="msg-text">{msg.message}</div>
+                      )}
+
                       <div className="msg-timestamp">
                         {new Date(msg.timestamp).toLocaleTimeString()}
                       </div>
                     </div>
                   ))}
+                  <div ref={messagesEndRef} style={{ height: "1px" }} />
                 </div>
 
-                <form
-                  className="chat-input-area"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    sendMessage();
-                  }}
-                >
-                  <input
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder={t("type_message")}
-                  />
-                  <button
-                    type="submit"
-                    className="send-button"
-                    disabled={!message.trim()}
+                <div className="chat-input-wrapper">
+                  {typingUser && (
+                    <div className="typing-indicator">
+                      <span className="typing-dot"></span>
+                      <span className="typing-dot"></span>
+                      <span className="typing-dot"></span>
+                      {typingUser}{" "}
+                      {i18n.language === "ar" ? "يكتب الآن..." : "is typing..."}
+                    </div>
+                  )}
+
+                  <form
+                    className="chat-input-area"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      sendMessage();
+                    }}
                   >
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="28"
-                      height="28"
-                      fill="none"
-                      stroke="white"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                    <button
+                      type="button"
+                      className="attach-btn"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
                     >
-                      <line x1="22" y1="2" x2="11" y2="13"></line>
-                      <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                    </svg>
-                  </button>
-                </form>
+                      {isUploading ? (
+                        <span className="loader"></span>
+                      ) : (
+                        <svg
+                          viewBox="0 0 24 24"
+                          width="24"
+                          height="24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                        </svg>
+                      )}
+                    </button>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      style={{ display: "none" }}
+                      onChange={handleFileChange}
+                    />
+
+                    <input
+                      value={message}
+                      onChange={handleInputChange}
+                      placeholder={t("type_message")}
+                    />
+                    <button
+                      type="submit"
+                      className="send-button"
+                      disabled={!message.trim() || isUploading}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        width="28"
+                        height="28"
+                        fill="none"
+                        stroke="white"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                      </svg>
+                    </button>
+                  </form>
+                </div>
               </>
             )}
           </div>

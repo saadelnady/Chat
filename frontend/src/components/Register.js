@@ -43,12 +43,12 @@ export default function Register({ onRegister }) {
             required
           />
         </div>
-        <div className="input-group">
+        {/* <div className="input-group">
           <select value={role} onChange={(e) => setRole(e.target.value)}>
             <option value="seller">{t("seller")}</option>
             <option value="admin">{t("admin")}</option>
           </select>
-        </div>
+        </div> */}
         <button type="submit" disabled={loading}>
           {loading ? t("register.loading_msg") : t("register.button")}
         </button>

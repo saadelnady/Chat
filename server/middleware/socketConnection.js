@@ -24,16 +24,35 @@ const socketConnection = () => {
     });
 
     socket.on("send_message", async (data) => {
-      const msg = new Message(data);
-      await msg.save();
+      console.log(`[Server] Message from ${data.author} to room ${data.room}`);
       
+      const msg = new Message(data);
+      await msg.save(); // بنسيف الرسالة عشان ناخد الـ _id الحقيقي
+      
+      // بنبعت النسخة اللي اتسيفت (عشان تتضمن الـ _id) للكل
       // Broadcast to specific room
-      io.to(data.room).emit("receive_message", data);
+      io.to(data.room).emit("receive_message", msg);
 
-      // لو كانت رسالة موجهة لتاجر (سواء من تاجر أو أدمن)، نبعتها لغرفة تنبيهات الأدمنز المشتركة
+      // تنبيه الأدمن لو الرسالة في غرفة شات
       if (data.room.startsWith("seller_")) {
-        io.to("admins_notifications").emit("receive_message", data);
+        console.log(`[Server] Notifying admins room about message in ${data.room}`);
+        io.to("admins_notifications").emit("new_notification", msg);
       }
+    });
+
+    // أحداث الكتابة
+    socket.on("typing", (data) => {
+      socket.to(data.room).emit("user_typing", {
+        username: data.username,
+        isTyping: true,
+      });
+    });
+
+    socket.on("stop_typing", (data) => {
+      socket.to(data.room).emit("user_typing", {
+        username: data.username,
+        isTyping: false,
+      });
     });
 
     socket.on("disconnect", () => {
