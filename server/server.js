@@ -25,6 +25,13 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use((req, res, next) => {
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; connect-src 'self' http://localhost:3000 http://localhost:5000 ws://localhost:3000 ws://localhost:5000",
+  );
+  next();
+});
 
 // Serve uploads folder as static
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
