@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Login from "./components/Login";
 import Register from "./components/Register";
-import Chat from "./components/Chat";
+import Chat from "./components/chat/Chat";
 import "./App.css";
 function App() {
   const [loggedIn, setLoggedIn] = useState(!!localStorage.getItem("token"));
