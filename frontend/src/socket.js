@@ -6,4 +6,7 @@ export const url =
 
 export const socket = io(url, {
   autoConnect: true,
+  extraHeaders: {
+    "ngrok-skip-browser-warning": "69420", // <-- السطر السحري للسوكيت
+  },
 });
