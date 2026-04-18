@@ -1,14 +1,23 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
-
+import { io } from "../server.js";
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
 const register = async (req, res) => {
   const { username, password, role } = req.body;
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    await new User({ username, password: hashedPassword, role }).save();
+    const user = await new User({
+      username,
+      password: hashedPassword,
+      role,
+    }).save();
+
+    const userObj = user.toObject();
+    delete userObj.password;
+
+    io.emit("new_user_registered", userObj);
     res.status(201).json({ message: "User registered ✅" });
   } catch (error) {
     res.status(400).json({ error: "Username already exists" });

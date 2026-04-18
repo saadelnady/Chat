@@ -10,9 +10,12 @@ import { Server } from "socket.io";
 import sellerRoutes from "./routes/sellerRoutes.js";
 import socketConnection from "./middleware/socketConnection.js";
 import upload from "./middleware/uploadMiddleware.js";
+import { uploadFile } from "./controllers/uploadControllers.js";
+import authMiddleware from "./middleware/authMiddleware.js";
+import allowedTo from "./middleware/allowedTo.js";
 
 dotenv.config();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
 // ES Modules __dirname fix
 const __filename = fileURLToPath(import.meta.url);
@@ -36,28 +39,18 @@ app.use((req, res, next) => {
 // Serve uploads folder as static
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// File upload endpoint
+app.post(
+  "/upload",
+  authMiddleware,
+  allowedTo("admin", "seller"),
+  upload.single("file"),
+  uploadFile,
+);
+
 // Routes
 app.use("/", authRoutes);
 app.use("/sellers", sellerRoutes);
-
-// File upload endpoint
-app.post("/upload", upload.single("file"), (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ message: "No file uploaded" });
-    }
-    // Return path to file including server host & port
-    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
-    res.json({
-      fileUrl,
-      fileName: req.file.originalname,
-      fileType: req.file.mimetype.startsWith("image") ? "image" : "file",
-    });
-  } catch (error) {
-    console.error("Upload error:", error);
-    res.status(500).json({ message: "Error uploading file" });
-  }
-});
 
 // Create Server
 const server = createServer(app);
