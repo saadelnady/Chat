@@ -1,5 +1,4 @@
-// Helper functions لل login/register
-const API_URL = process.env.REACT_APP_API_URL;
+import { API_URL } from "./apiUrl";
 
 export const register = async (username, password, role) => {
   const res = await fetch(`${API_URL}/register`, {

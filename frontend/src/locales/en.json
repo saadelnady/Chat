@@ -40,6 +40,8 @@
     "offline": "Offline",
     "no_notif": "No notifications",
     "notifications": "Notifications",
-    "clear_notif": "Clear notifications"
+    "clear_notif": "Clear notifications",
+    "send": "Send",
+    "typing": "is typing..."
   }
 }
