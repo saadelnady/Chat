@@ -9,4 +9,5 @@ export const socket = io(url, {
   extraHeaders: {
     "ngrok-skip-browser-warning": "69420", // <-- السطر السحري للسوكيت
   },
+  transports: ["websocket"],
 });
